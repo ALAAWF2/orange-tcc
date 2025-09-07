@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 const fmt = (n: number) =>
   new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 0 }).format(n || 0);
 
-// يحدّد شريحة عمولة المعرض حسب تحقيقه (كعشري داخل الدالة)
+// يحدّد شريحة عمولة المعرض حسب تحقيقه (عشري داخليًا)
 function tieredOutletCommission(achievementDecimal: number) {
   if (achievementDecimal >= 1) return 0.02;      // 2%
   if (achievementDecimal >= 0.9) return 0.01;    // 1%
@@ -26,32 +26,29 @@ function calcRow(sales: number, target: number, outletCommission: number) {
 type Row = { id: string; name: string; sales: number; target: number };
 
 export default function TargetCommissionCalculatorAR() {
+  // لا نحفظ شيئًا — قيم ابتدائية فقط
   const [outletTarget, setOutletTarget] = useState<number>(1_000_000);
-
-  // المدير يُدخِل 88 = 88%
-  const [outletAchPercent, setOutletAchPercent] = useState<number>(0);
-
-  // الآن لازم المدير يحدّد العدد؛ بدونه الجدول مخفي
+  const [outletAchPercent, setOutletAchPercent] = useState<number>(0); // 88 = 88%
   const [suggestCount, setSuggestCount] = useState<number>(0);
 
-  // تحويل 88% إلى 0.88 للحساب
+  // مسح أي بقايا قديمة عند فتح الصفحة
+  useEffect(() => {
+    try {
+      localStorage.removeItem("tcc_rows_v2");
+      localStorage.removeItem("tcc_rows_v1");
+      localStorage.removeItem("tcc_meta_v2");
+      localStorage.removeItem("tcc_meta_v1");
+    } catch {}
+  }, []);
+
   const outletCommission = useMemo(
     () => tieredOutletCommission((outletAchPercent || 0) / 100),
     [outletAchPercent]
   );
 
-  // الصفوف (مع توافق خلفي)
-  const [rows, setRows] = useState<Row[]>(() => {
-    const savedV2 =
-      typeof window !== "undefined" ? localStorage.getItem("tcc_rows_v2") : null;
-    const savedV1 =
-      typeof window !== "undefined" ? localStorage.getItem("tcc_rows_v1") : null;
-    if (savedV2) return JSON.parse(savedV2);
-    if (savedV1) return JSON.parse(savedV1);
-    return []; // لا نعرض شيء حتى يتحدّد العدد
-  });
+  // الصفوف: لا قراءة ولا حفظ — ننشئها فقط حسب عدد الموظفين
+  const [rows, setRows] = useState<Row[]>([]);
 
-  // لو تغيّر عدد الموظفين: أنشئ/قصّف الصفوف طبقًا للعدد
   useEffect(() => {
     if (!suggestCount || suggestCount <= 0) {
       setRows([]);
@@ -74,43 +71,6 @@ export default function TargetCommissionCalculatorAR() {
     });
   }, [suggestCount]);
 
-  // تحميل الميتاداتا (مع تحويل النسخة القديمة من عشري إلى نسبة)
-  useEffect(() => {
-    const savedV2 =
-      typeof window !== "undefined" ? localStorage.getItem("tcc_meta_v2") : null;
-    const savedV1 =
-      typeof window !== "undefined" ? localStorage.getItem("tcc_meta_v1") : null;
-
-    if (savedV2) {
-      const m = JSON.parse(savedV2);
-      if (typeof m.outletTarget === "number") setOutletTarget(m.outletTarget);
-      if (typeof m.outletAchPercent === "number")
-        setOutletAchPercent(m.outletAchPercent);
-      if (typeof m.suggestCount === "number") setSuggestCount(m.suggestCount);
-      return;
-    }
-    if (savedV1) {
-      const m = JSON.parse(savedV1);
-      if (typeof m.outletTarget === "number") setOutletTarget(m.outletTarget);
-      if (typeof m.outletAchPct === "number")
-        setOutletAchPercent(Math.round(m.outletAchPct * 100)); // كان عشري
-      if (typeof m.suggestCount === "number") setSuggestCount(m.suggestCount);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // حفظ تلقائي
-  useEffect(() => {
-    localStorage.setItem("tcc_rows_v2", JSON.stringify(rows));
-  }, [rows]);
-  useEffect(() => {
-    localStorage.setItem(
-      "tcc_meta_v2",
-      JSON.stringify({ outletTarget, outletAchPercent, suggestCount })
-    );
-  }, [outletTarget, outletAchPercent, suggestCount]);
-
-  // المجاميع
   const totals = useMemo(() => {
     const totalSales = rows.reduce((s, r) => s + (r.sales || 0), 0);
     const totalTargets = rows.reduce((s, r) => s + (r.target || 0), 0);
@@ -127,14 +87,12 @@ export default function TargetCommissionCalculatorAR() {
     return { totalSales, totalTargets, sumNew, avgAch, avgRate, rows: perRow };
   }, [rows, outletCommission]);
 
-  // توزيع متساوٍ: لن يعمل إلا بوجود عدد موظفين
   const equalDistribute = () => {
     if (!suggestCount || suggestCount <= 0) {
       alert("من فضلك أدخل عدد الموظفين أولاً.");
       return;
     }
-    const per =
-      suggestCount > 0 ? Math.floor(outletTarget / suggestCount) : 0;
+    const per = Math.floor(outletTarget / suggestCount);
     setRows((prev) => prev.map((x) => ({ ...x, target: per })));
   };
 
@@ -148,6 +106,7 @@ export default function TargetCommissionCalculatorAR() {
         target: suggestCount > 0 ? Math.floor(outletTarget / suggestCount) : 0,
       },
     ]);
+
   const removeRow = (id: string) =>
     setRows((prev) => prev.filter((r) => r.id !== id));
 
@@ -178,7 +137,6 @@ export default function TargetCommissionCalculatorAR() {
           حاسبة التارجت والعمولة
         </h1>
 
-        {/* بطاقة المدخلات + الإجماليات جنبًا إلى جنب */}
         <div className="grid md:grid-cols-2 gap-4">
           {/* مدخلات */}
           <div className="bg-white rounded-2xl shadow p-4 space-y-3">
@@ -279,7 +237,7 @@ export default function TargetCommissionCalculatorAR() {
             </div>
           </div>
 
-          {/* الإجماليات (مربع التفاصيل) */}
+          {/* الإجماليات */}
           <div className="bg-white rounded-2xl shadow p-4 space-y-3">
             <h2 className="font-semibold text-lg">الإجماليات</h2>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -297,7 +255,7 @@ export default function TargetCommissionCalculatorAR() {
           </div>
         </div>
 
-        {/* الجدول — مخفي حتى يُدخل عدد الموظفين */}
+        {/* الجدول — لا يظهر إلا بعد إدخال عدد الموظفين */}
         {suggestCount > 0 && rows.length > 0 ? (
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full bg-white rounded-2xl shadow overflow-hidden">
