@@ -355,10 +355,7 @@ export default function TargetCommissionCalculatorAR() {
           </div>
         )}
 
-        <div className="mt-4 text-xs text-gray-500">
-          القاعدة الجديدة تطبق عند عمولة معرض 2% أو 0.5%. عند 1% تُحسب عمولة الموظف
-          كالقديمة (عمولة المعرض × المبيعات).
-        </div>
+        
       </div>
     </div>
   );
